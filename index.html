@@ -672,7 +672,7 @@ function renderDRE(data, dre) {
 }
 
 function toggleGroup(code) {
-  state.collapsed[code] = !(state.collapsed[code] === false);
+  state.collapsed[code] = (state.collapsed[code] === false) ? true : false;
   const data = filterData(state.months, state.cc);
   renderDRE(data, computeDRE(data));
 }
