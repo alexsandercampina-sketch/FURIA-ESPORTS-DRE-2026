@@ -948,7 +948,7 @@ function renderBar() {
   });
 }
 
-fetch('data.json')
+fetch('data.json?v=' + Date.now())
   .then(function(r){ if(!r.ok) throw new Error('data.json nao encontrado'); return r.json(); })
   .then(function(data){
     RAW_DATA = data;
