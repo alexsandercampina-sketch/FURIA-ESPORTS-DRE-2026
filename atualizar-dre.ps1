@@ -1,6 +1,5 @@
 # ============================================================
 # FURIA DRE - Script de Atualizacao Mensal
-# Execute sempre que o Excel for atualizado.
 # Pre-requisito: Microsoft Excel instalado + internet para PTAX BACEN.
 # ============================================================
 
@@ -21,7 +20,7 @@ if (-not (Test-Path $ExcelPath)) {
     pause; exit 1
 }
 
-# Sheets cujos valores estao em USD (serao convertidas via PTAX automatico)
+# Sheets cujos valores estao em USD
 $USD_SHEETS = @('FURIAGG', 'FURIA LLC', 'GGCORP', 'FURIA GG CORP')
 
 # ── Funcoes auxiliares ───────────────────────────────────────
@@ -46,9 +45,9 @@ function ParseNumeric([object]$val) {
     $hasComma = $s.Contains(',')
     if ($hasDot -and $hasComma) {
         if ($s.LastIndexOf('.') -gt $s.LastIndexOf(',')) {
-            $s = $s -replace ',', ''                         # US: 138,888.89
+            $s = $s -replace ',', ''
         } else {
-            $s = ($s -replace '\.', '') -replace ',', '.'   # BR: 138.888,89
+            $s = ($s -replace '\.', '') -replace ',', '.'
         }
     } elseif ($hasComma) {
         $s = $s -replace ',', '.'
@@ -58,14 +57,11 @@ function ParseNumeric([object]$val) {
 
 function EscJson([string]$s) { $s -replace '\\', '\\' -replace '"', '\"' }
 
-# Busca PTAX venda BACEN para o ultimo dia util do mes MM/yyyy
 function GetPTAX([string]$month) {
     $parts   = $month -split '/'
     $mo      = [int]$parts[0]
     $yr      = [int]$parts[1]
     $lastDay = [DateTime]::new($yr, $mo, [DateTime]::DaysInMonth($yr, $mo))
-
-    # Tenta os ultimos 5 dias (ignora fins de semana e feriados sem cotacao)
     for ($d = 0; $d -lt 5; $d++) {
         $date    = $lastDay.AddDays(-$d)
         $dateStr = $date.ToString("MM-dd-yyyy")
@@ -80,7 +76,7 @@ function GetPTAX([string]$month) {
             }
         } catch {}
     }
-    throw "Nao foi possivel obter PTAX do BACEN para $month. Verifique a conexao com a internet."
+    throw "Nao foi possivel obter PTAX do BACEN para $month."
 }
 
 # ── Abre Excel ───────────────────────────────────────────────
@@ -89,15 +85,15 @@ $xl = New-Object -ComObject Excel.Application
 $xl.Visible       = $false
 $xl.DisplayAlerts = $false
 
-$aggBRL    = @{}   # registros em BRL (direto)
-$aggUSD    = @{}   # registros em USD bruto (conversao aplicada depois)
+$aggBRL    = @{}
+$aggUSD    = @{}
 $totalRows = 0
 $skipped   = 0
 
 try {
     $wb = $xl.Workbooks.Open($ExcelPath, 0, $true)
 
-    # Detecta sheets com dados contabeis (col 4 com codigo contabil nas primeiras 30 linhas)
+    # Detecta sheets com dados contabeis
     $sheetsToProcess = @()
     foreach ($ws in $wb.Sheets) {
         if ($ws.Name -match 'MODELO') { continue }
@@ -113,34 +109,49 @@ try {
         }
     }
 
-    if ($sheetsToProcess.Count -eq 0) {
-        throw "Nenhuma sheet com dados contabeis encontrada."
-    }
-
+    if ($sheetsToProcess.Count -eq 0) { throw "Nenhuma sheet com dados contabeis encontrada." }
     Write-Host ""
 
-    # ── Leitura ──────────────────────────────────────────────
+    # ── Leitura em bloco (sem loop de celulas) ───────────────
     foreach ($ws in $sheetsToProcess) {
-        $lastRow = $ws.UsedRange.Rows.Count
-        $isUSD   = $USD_SHEETS -contains $ws.Name
-        $label   = if ($isUSD) { "USD" } else { "BRL" }
-        Write-Host "Lendo '$($ws.Name)': $lastRow linhas [$label]..." -ForegroundColor Cyan
+        $isUSD = $USD_SHEETS -contains $ws.Name
+        $label = if ($isUSD) { "USD" } else { "BRL" }
+        $t0    = [DateTime]::Now
+
+        Write-Host "Carregando '$($ws.Name)' em bloco [$label]..." -ForegroundColor Cyan
+
+        # Lê TODO o intervalo de uma vez — muito mais rapido que celula a celula
+        $values   = $ws.UsedRange.Value2
+        $rowCount = $values.GetUpperBound(0)
+        $colCount = $values.GetUpperBound(1)
+
+        if ($colCount -lt 8) {
+            Write-Host "  -> Colunas insuficientes, ignorada." -ForegroundColor DarkGray
+            continue
+        }
+
         $sheetRows = 0
 
-        for ($i = 2; $i -le $lastRow; $i++) {
-            $accRaw = $ws.Cells($i, 4).Text.Trim()
+        for ($i = 2; $i -le $rowCount; $i++) {
+            # Coluna 4: conta contabil
+            $accRaw = if ($null -ne $values[$i, 4]) { $values[$i, 4].ToString().Trim() } else { '' }
             if (-not $accRaw -or $accRaw -notmatch '^\d+\.\d+') { $skipped++; continue }
 
-            $dt = ParseDate $ws.Cells($i, 1).Value2 $ws.Cells($i, 1).Text.Trim()
+            # Coluna 1: data (serial double ou texto dd/MM/yyyy)
+            $dateVal = $values[$i, 1]
+            $dateTxt = if ($dateVal -is [string]) { $dateVal.Trim() } else { '' }
+            $dt = ParseDate $dateVal $dateTxt
             if (-not $dt) { $skipped++; continue }
             $month = $dt.ToString("MM/yyyy")
 
-            $deb = ParseNumeric $ws.Cells($i, 7).Value2
-            $cre = ParseNumeric $ws.Cells($i, 8).Value2
+            # Colunas 7 e 8: debito e credito
+            $deb = ParseNumeric $values[$i, 7]
+            $cre = ParseNumeric $values[$i, 8]
             if ($deb -eq 0 -and $cre -eq 0) { $skipped++; continue }
 
-            $cc     = $ws.Cells($i, 11).Text.Trim()
-            $filial = $ws.Cells($i, 12).Text.Trim()
+            # Colunas 11 e 12: CC e filial
+            $cc     = if ($colCount -ge 11 -and $null -ne $values[$i, 11]) { $values[$i, 11].ToString().Trim() } else { '' }
+            $filial = if ($colCount -ge 12 -and $null -ne $values[$i, 12]) { $values[$i, 12].ToString().Trim() } else { '' }
             if (-not $filial) { $filial = $ws.Name }
             if (-not $cc)     { $cc = "Sem CC" }
 
@@ -148,7 +159,7 @@ try {
             if ($parts.Count -lt 4) { $skipped++; continue }
             $acc4 = ($parts[0..3]) -join '.'
 
-            $key = "$month|$acc4|$cc|$filial"
+            $key    = "$month|$acc4|$cc|$filial"
             $target = if ($isUSD) { $aggUSD } else { $aggBRL }
 
             if ($target.ContainsKey($key)) {
@@ -159,7 +170,9 @@ try {
             }
             $totalRows++; $sheetRows++
         }
-        Write-Host "  -> $sheetRows linhas lidas" -ForegroundColor Gray
+
+        $elapsed = ([DateTime]::Now - $t0).TotalSeconds
+        Write-Host "  -> $sheetRows registros em $([math]::Round($elapsed,1))s" -ForegroundColor Gray
     }
 
 } finally {
@@ -172,9 +185,8 @@ Write-Host ""
 Write-Host "Total: $totalRows linhas | Ignoradas: $skipped" -ForegroundColor Green
 Write-Host "BRL: $($aggBRL.Count) registros | USD (bruto): $($aggUSD.Count) registros" -ForegroundColor Green
 
-# ── PTAX automatico: ultimo mes do razao ─────────────────────
+# ── PTAX automatico ──────────────────────────────────────────
 if ($aggUSD.Count -gt 0) {
-    # Encontra o ultimo mes presente em TODOS os dados
     $allMonths = @()
     $aggBRL.Values | ForEach-Object { $allMonths += $_.m }
     $aggUSD.Values | ForEach-Object { $allMonths += $_.m }
@@ -187,7 +199,6 @@ if ($aggUSD.Count -gt 0) {
     Write-Host "Buscando PTAX BACEN..." -ForegroundColor Cyan
     $ptax = GetPTAX $lastMonth
 
-    # Converte USD -> BRL e mescla com aggBRL
     foreach ($key in $aggUSD.Keys) {
         $rec = $aggUSD[$key]
         $dBRL  = $rec.d  * $ptax
@@ -210,7 +221,6 @@ $records = $aggBRL.Values | ForEach-Object {
 }
 $json = '[' + ($records -join ',') + ']'
 [System.IO.File]::WriteAllText($OutputJson, $json, [System.Text.Encoding]::UTF8)
-
 $kb = [math]::Round((Get-Item $OutputJson).Length / 1KB, 1)
 Write-Host "data.json salvo: $kb KB" -ForegroundColor Green
 
@@ -218,7 +228,6 @@ Write-Host "data.json salvo: $kb KB" -ForegroundColor Green
 Write-Host ""
 Write-Host "Enviando para GitHub..." -ForegroundColor Cyan
 Push-Location $RepoPath
-
 $today = Get-Date -Format "dd/MM/yyyy"
 git add data.json
 git commit -m "Atualizar dados DRE - $today"
