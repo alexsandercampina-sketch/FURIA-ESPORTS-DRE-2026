@@ -344,6 +344,7 @@
     <div class="panel-body">
       <div class="center-scroll">
         <div class="kpi-card" id="kpiCard"></div>
+        <div class="summary-card" id="momCard"></div>
         <div class="summary-card">
           <div class="summary-card-header">Métricas Principais</div>
           <table class="summary-table" id="summaryTable"></table>
@@ -634,6 +635,7 @@ function render() {
 
   renderDRE(data, dre);
   renderKPI(dre, lbl);
+  renderMoM(dre);
   renderSummary(dre);
   renderDonut(data);
   renderLine();
@@ -705,6 +707,29 @@ function renderKPI(dre, lbl) {
   const ms      = [...state.months].sort();
   const lastIdx = ALL_MONTHS.indexOf(ms[ms.length - 1]);
   const n       = ms.length;
+  let priorV = null, varPct = null;
+
+  if (lastIdx >= n) {
+    const priorMs = ALL_MONTHS.slice(lastIdx - n, lastIdx);
+    const pd = filterData(priorMs, state.cc);
+    priorV = computeDRE(pd).resultado;
+    if (priorV !== 0) varPct = (dre.resultado - priorV) / Math.abs(priorV) * 100;
+  }
+
+  const varHtml = varPct !== null
+    ? '<span class="kpi-variation '+(varPct >= 0 ? 'pos' : 'neg')+'">'+(varPct >= 0 ? '▲' : '▼')+' '+Math.abs(varPct).toFixed(1)+'%</span><span class="kpi-prior">Ant.: '+fmt(priorV, true)+'</span>'
+    : '<span class="kpi-prior">Sem período anterior</span>';
+
+  document.getElementById('kpiCard').innerHTML =
+    '<div class="kpi-period-label">Resultado Líquido — '+lbl+'</div>' +
+    '<div class="kpi-value '+vc(dre.resultado)+'">'+fmt(dre.resultado)+'</div>' +
+    '<div class="kpi-footer">'+varHtml+'</div>';
+}
+
+function renderMoM(dre) {
+  const ms      = [...state.months].sort();
+  const lastIdx = ALL_MONTHS.indexOf(ms[ms.length - 1]);
+  const n       = ms.length;
   let priorDre  = null;
 
   if (lastIdx >= n) {
@@ -712,33 +737,38 @@ function renderKPI(dre, lbl) {
     priorDre = computeDRE(filterData(priorMs, state.cc));
   }
 
-  function mkVar(cur, prior) {
-    if (prior === null || prior === undefined) return '<span class="kpi-prior">Sem per. anterior</span>';
-    if (prior === 0) return '<span class="kpi-prior">—</span>';
-    const p   = (cur - prior) / Math.abs(prior) * 100;
-    const cls = p >= 0 ? 'pos' : 'neg';
-    const arr = p >= 0 ? '▲' : '▼';
-    return '<span class="kpi-variation '+cls+'">'+arr+' '+Math.abs(p).toFixed(1)+'%</span><span class="kpi-prior">Ant.: '+fmt(prior, true)+'</span>';
-  }
-
-  const cards = [
-    { label:'Receita Bruta',    val:dre.receita_bruta,  prior:priorDre && priorDre.receita_bruta,  full:false },
-    { label:'Lucro Bruto',      val:dre.lucro_bruto,    prior:priorDre && priorDre.lucro_bruto,    full:false },
-    { label:'Custo Servicos',   val:dre.custo_servicos, prior:priorDre && priorDre.custo_servicos, full:false },
-    { label:'Despesas Operac.', val:dre.despesas_op,    prior:priorDre && priorDre.despesas_op,    full:false },
-    { label:'Resultado Liquido — '+lbl, val:dre.resultado, prior:priorDre && priorDre.resultado, full:true },
+  const rows = [
+    { label:'Receita Bruta',    cur:dre.receita_bruta,  prior:priorDre && priorDre.receita_bruta  },
+    { label:'Custo Serviços',   cur:dre.custo_servicos, prior:priorDre && priorDre.custo_servicos },
+    { label:'Despesas Operac.', cur:dre.despesas_op,    prior:priorDre && priorDre.despesas_op    },
+    { label:'Lucro Bruto',      cur:dre.lucro_bruto,    prior:priorDre && priorDre.lucro_bruto    },
+    { label:'Resultado Líq.',   cur:dre.resultado,      prior:priorDre && priorDre.resultado      },
   ];
 
-  document.getElementById('kpiCard').innerHTML =
-    '<div class="kpi-grid">' +
-    cards.map(function(c) {
-      return '<div class="kpi-mini'+(c.full?' full':'')+'">' +
-        '<div class="kpi-mini-label">'+c.label+'</div>' +
-        '<div class="kpi-mini-value '+vc(c.val)+'">'+fmt(c.val)+'</div>' +
-        '<div class="kpi-mini-footer">'+mkVar(c.val, c.prior)+'</div>' +
-        '</div>';
+  const label = priorDre
+    ? 'vs ' + (n === 1
+        ? MONTH_LABELS[ALL_MONTHS.indexOf(ms[0]) - 1] || 'per. ant.'
+        : 'período anterior')
+    : 'Sem período anterior';
+
+  document.getElementById('momCard').innerHTML =
+    '<div class="summary-card-header">Variação MoM — '+label+'</div>' +
+    '<table class="summary-table"><tbody>' +
+    rows.map(function(r) {
+      var varHtml = '—';
+      if (priorDre && r.prior !== 0 && r.prior !== null) {
+        var p   = (r.cur - r.prior) / Math.abs(r.prior) * 100;
+        var cls = p >= 0 ? 'val-pos' : 'val-neg';
+        var arr = p >= 0 ? '▲' : '▼';
+        varHtml = '<span class="'+cls+'" style="font-weight:700">'+arr+' '+Math.abs(p).toFixed(1)+'%</span>';
+      }
+      return '<tr>' +
+        '<td class="s-name">'+r.label+'</td>' +
+        '<td class="s-val '+vc(r.cur)+'">'+fmt(r.cur)+'</td>' +
+        '<td class="s-pct" style="text-align:right;padding-right:12px">'+varHtml+'</td>' +
+        '</tr>';
     }).join('') +
-    '</div>';
+    '</tbody></table>';
 }
 // ── CENTER: SUMMARY TABLE ────────────────────────────────
 function renderSummary(dre) {
