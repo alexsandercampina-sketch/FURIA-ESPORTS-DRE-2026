@@ -102,8 +102,11 @@
   }
   .cc-select option { background: #ffffff; color: #111827; }
 
-  .period-group { display: flex; gap: 4px; margin-left: auto; align-items: center; flex-shrink: 0; }
-  .period-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; margin-right: 2px; white-space: nowrap; }
+  .period-group { display: flex; gap: 4px; margin-left: auto; align-items: center; flex-shrink: 0; min-width: 0; overflow-x: auto; }
+  .period-group::-webkit-scrollbar { height: 3px; }
+  .period-group::-webkit-scrollbar-track { background: transparent; }
+  .period-group::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
+  .period-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; margin-right: 2px; white-space: nowrap; flex-shrink: 0; }
 
   .period-chip {
     background: var(--surface);
@@ -295,7 +298,7 @@
 
   <div class="period-group">
     <span class="period-label">Período</span>
-    <div id="periodChips" style="display:flex;gap:4px;"></div>
+    <div id="periodChips" style="display:flex;gap:4px;flex-wrap:nowrap;"></div>
   </div>
 </div>
 
