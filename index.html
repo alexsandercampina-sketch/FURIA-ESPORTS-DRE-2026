@@ -34,6 +34,23 @@
     overflow: hidden;
   }
 
+  /* Faixa de periodo abaixo do header */
+  #period-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 18px;
+    height: 36px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+  }
+  #period-bar::-webkit-scrollbar { height: 3px; }
+  #period-bar::-webkit-scrollbar-track { background: transparent; }
+  #period-bar::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
   /* HEADER */
   #header {
     height: 52px;
@@ -102,10 +119,7 @@
   }
   .cc-select option { background: #ffffff; color: #111827; }
 
-  .period-group { display: flex; gap: 4px; margin-left: auto; align-items: center; flex-shrink: 0; min-width: 0; overflow-x: auto; }
-  .period-group::-webkit-scrollbar { height: 3px; }
-  .period-group::-webkit-scrollbar-track { background: transparent; }
-  .period-group::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
+  .period-group { display: flex; gap: 4px; margin-left: auto; align-items: center; flex-shrink: 0; }
   .period-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; margin-right: 2px; white-space: nowrap; flex-shrink: 0; }
 
   .period-chip {
@@ -125,7 +139,7 @@
   .period-chip:hover:not(.active) { border-color: var(--text3); color: var(--text); }
 
   /* MAIN LAYOUT */
-  #main { display: flex; height: calc(100vh - 52px); overflow: hidden; }
+  #main { display: flex; height: calc(100vh - 88px); overflow: hidden; }
 
   .panel { display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid var(--border); }
   #panel-left   { width: 32%; flex-shrink: 0; }
@@ -296,12 +310,10 @@
     </select>
   </div>
 
-  <div class="period-group">
-    <span class="period-label">Período</span>
-    <div id="periodChips" style="display:flex;gap:4px;flex-wrap:nowrap;"></div>
+  
   </div>
 </div>
-
+<div id="period-bar"><span class="period-label">Per&#237;odo</span><div id="periodChips" style="display:flex;gap:4px;flex-wrap:nowrap;"></div></div>
 <div id="main">
   <!-- LEFT: DRE Table -->
   <div class="panel" id="panel-left">
