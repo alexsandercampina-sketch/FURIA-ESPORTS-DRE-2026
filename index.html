@@ -282,7 +282,6 @@
   <div class="filial-group">
     <span class="filial-label">Filial</span>
     <button class="filial-btn active" data-filial="all" onclick="setFilial(this)">Consolidado</button>
-    <button class="filial-btn" data-filial="furia" onclick="setFilial(this)">Furia Esports LTDA</button>
   </div>
 
   <div class="header-sep"></div>
@@ -540,7 +539,7 @@ function onCCChange(sel) {
 // ═══════════════════════════════════════════════════════════
 function filterData(months, cc) {
   return RAW_DATA.filter(r =>
-    months.includes(r.m) && (!cc || r.cc === cc)
+    months.includes(r.m) && (!cc || r.cc === cc) && (state.filial === 'all' || r.f === state.filial)
   );
 }
 
@@ -894,6 +893,17 @@ fetch('data.json')
       var p=m.split('/'); return _mn[+p[0]-1]+'/'+p[1].slice(2);
     });
     state.months = ALL_MONTHS.slice();
+    var _filiais = Array.from(new Set(data.map(function(r){return r.f||'';})).values()).filter(Boolean).sort();
+    var _fg = document.querySelector('.filial-group');
+    _fg.innerHTML = '<span class="filial-label">Filial</span><button class="filial-btn active" data-filial="all" onclick="setFilial(this)">Consolidado</button>';
+    _filiais.forEach(function(f){
+      var _b = document.createElement('button');
+      _b.className = 'filial-btn';
+      _b.dataset.filial = f;
+      _b.setAttribute('onclick','setFilial(this)');
+      _b.textContent = f;
+      _fg.appendChild(_b);
+    });
     init();
   })
   .catch(function(err){
